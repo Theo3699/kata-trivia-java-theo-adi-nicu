@@ -1,57 +1,44 @@
 package trivia;
 
+import trivia.utils.GameUtils;
+
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.stream.IntStream;
 
-// REFACTOR ME
 public class GameBetter implements IGame {
     private static final Logger logger = Logger.getLogger(GameBetter.class.getSimpleName());
-    private static final String QUESTION = " Question ";
     private final List<String> players = new ArrayList<>();
     private final int[] places = new int[6];
     private final int[] purses = new int[6];
     private final boolean[] inPenaltyBox = new boolean[6];
-
-    private final List<String> popQuestions = new LinkedList<>();
-    private final List<String> scienceQuestions = new LinkedList<>();
-    private final List<String> sportsQuestions = new LinkedList<>();
-    private final List<String> rockQuestions = new LinkedList<>();
-
+    private final Map<QuestionType, List<String>> questions;
     private int currentPlayer = 0;
-    private boolean isGettingOutOfPenaltyBox;
 
     public GameBetter() {
-        IntStream.range(0, 50).forEach(counter -> {
-            rockQuestions.add(createQuestion(QuestionType.ROCK, counter));
-            sportsQuestions.add(createQuestion(QuestionType.SPORTS, counter));
-            scienceQuestions.add(createQuestion(QuestionType.SCIENCE, counter));
-            popQuestions.add(createQuestion(QuestionType.POP, counter));
-        });
-    }
-
-    private String createQuestion(QuestionType questionType, int counter) {
-        return questionType.getValue() + QUESTION + counter;
+        questions = GameUtils.constructQuestions();
     }
 
     @Override
     public boolean add(String playerName) {
         players.add(playerName);
         int playersNumber = getPlayersNumber();
-        resetScore(playersNumber);
+        if (playersNumber > 5) {
+            return false;
+        }
+        resetScore(playersNumber - 1);
 
         logger.log(Level.INFO, "{0} was added", playerName);
         logger.log(Level.INFO, "They are player number {0}", playersNumber);
         return true;
     }
 
-    private void resetScore(int numberOfPlayers) {
-        places[numberOfPlayers] = 0;
-        purses[numberOfPlayers] = 0;
-        inPenaltyBox[numberOfPlayers] = false;
+    private void resetScore(int lastPlayerIndex) {
+        places[lastPlayerIndex] = 0;
+        purses[lastPlayerIndex] = 0;
+        inPenaltyBox[lastPlayerIndex] = false;
     }
 
     private int getPlayersNumber() {
@@ -66,13 +53,12 @@ public class GameBetter implements IGame {
 
         if (inPenaltyBox[currentPlayer]) {
             if (roll % 2 != 0) {
-                isGettingOutOfPenaltyBox = true;
+                inPenaltyBox[currentPlayer] = false;
 
                 logger.log(Level.INFO, "{0} is getting out of the penalty box", activePlayer);
                 computePlayerMove(roll, activePlayer);
             } else {
                 logger.log(Level.INFO, "{0} is not getting out of the penalty box", activePlayer);
-                isGettingOutOfPenaltyBox = false;
             }
 
         } else {
@@ -88,26 +74,26 @@ public class GameBetter implements IGame {
         }
 
         logger.log(Level.INFO, () -> String.format("%s's new location is %s", activePlayer, places[currentPlayer]));
-        logger.log(Level.INFO, "The category is {0}", currentCategory());
+        logger.log(Level.INFO, "The category is {0}", currentCategory().getValue());
         askQuestion();
     }
 
     private void askQuestion() {
         switch (currentCategory()) {
             case POP -> {
-                String popQuestionRemoved = popQuestions.remove(0);
+                String popQuestionRemoved = questions.get(QuestionType.POP).remove(0);
                 logger.log(Level.INFO, popQuestionRemoved);
             }
             case SCIENCE -> {
-                String scienceQuestionRemoved = scienceQuestions.remove(0);
+                String scienceQuestionRemoved = questions.get(QuestionType.SCIENCE).remove(0);
                 logger.log(Level.INFO, scienceQuestionRemoved);
             }
             case SPORTS -> {
-                String sportsQuestionsRemoved = sportsQuestions.remove(0);
+                String sportsQuestionsRemoved = questions.get(QuestionType.SPORTS).remove(0);
                 logger.log(Level.INFO, sportsQuestionsRemoved);
             }
             case ROCK -> {
-                String rockQuestionsRemoved = rockQuestions.remove(0);
+                String rockQuestionsRemoved = questions.get(QuestionType.ROCK).remove(0);
                 logger.log(Level.INFO, rockQuestionsRemoved);
             }
         }
@@ -125,38 +111,35 @@ public class GameBetter implements IGame {
 
     @Override
     public boolean wasCorrectlyAnswered() {
-        if (checkIfPlayerIsInPenaltyBox()) {
+        if (!inPenaltyBox[currentPlayer]) {
             return computeCorrectAnswer();
         }
-
         changeActivePlayer();
         return true;
     }
 
-    private boolean checkIfPlayerIsInPenaltyBox() {
-        return !inPenaltyBox[currentPlayer] || (inPenaltyBox[currentPlayer] && isGettingOutOfPenaltyBox);
-    }
-
     private void changeActivePlayer() {
         currentPlayer++;
-        if (currentPlayer == players.size()) currentPlayer = 0;
+        if (currentPlayer == players.size()) {
+            currentPlayer = 0;
+        }
     }
 
     private boolean computeCorrectAnswer() {
         logger.log(Level.INFO, ("Answer was correct!!!!"));
-        int currentPlayerCoins = purses[currentPlayer]++;
+        int currentPlayerCoins = ++purses[currentPlayer];
         logger.log(Level.INFO, () -> String.format("%s now has %s Gold Coins.", players.get(currentPlayer), currentPlayerCoins));
 
-        boolean winner = didPlayerWin();
+        boolean doesGameContinue = isGameStateNonFinal();
         changeActivePlayer();
 
-        return winner;
+        return doesGameContinue;
     }
 
     @Override
     public boolean wrongAnswer() {
-        logger.log(Level.INFO, ("Question was incorrectly answered"));
-        logger.log(Level.INFO,  "{0} was sent to the penalty box", players.get(currentPlayer));
+        logger.log(Level.INFO, "Question was incorrectly answered");
+        logger.log(Level.INFO, "{0} was sent to the penalty box", players.get(currentPlayer));
         inPenaltyBox[currentPlayer] = true;
 
         changeActivePlayer();
@@ -164,7 +147,7 @@ public class GameBetter implements IGame {
     }
 
 
-    private boolean didPlayerWin() {
+    private boolean isGameStateNonFinal() {
         return purses[currentPlayer] != 6;
     }
 }
